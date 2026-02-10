@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { Channel, WebSocketMessage, Agent } from "../types";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { MentionInput } from "./MentionInput";
+import { MarkdownMessage } from "./MarkdownMessage";
 
 const API_URL = "http://localhost:8000/api";
 
@@ -48,7 +49,9 @@ function MessageBubble({ msg }: { msg: WebSocketMessage }) {
           <span className="message-type-badge">{msg.message_type.replace("_", " ")}</span>
         )}
       </div>
-      <div className="message-content">{msg.content}</div>
+      <div className="message-content">
+        <MarkdownMessage content={msg.content} />
+      </div>
     </div>
   );
 }
