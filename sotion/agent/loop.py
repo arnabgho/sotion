@@ -187,19 +187,21 @@ class AgentLoop:
         # Agent loop
         iteration = 0
         final_content = None
-        
+
         while iteration < self.max_iterations:
             iteration += 1
-            
+            logger.debug(f"Agent iteration {iteration}/{self.max_iterations}")
+
             # Call LLM
             response = await self.provider.chat(
                 messages=messages,
                 tools=self.tools.get_definitions(),
                 model=self.model
             )
-            
+
             # Handle tool calls
             if response.has_tool_calls:
+                logger.debug(f"Iteration {iteration}: {len(response.tool_calls)} tool calls, content={'present' if response.content else 'none'}")
                 # Add assistant message with tool calls
                 tool_call_dicts = [
                     {
@@ -227,10 +229,12 @@ class AgentLoop:
                     )
             else:
                 # No tool calls, we're done
+                logger.debug(f"Iteration {iteration}: No tool calls, final response received")
                 final_content = response.content
                 break
-        
+
         if final_content is None:
+            logger.warning(f"Agent loop reached max iterations ({iteration}/{self.max_iterations}) without final response")
             final_content = "I've completed processing but have no response to give."
         
         # Log response preview
