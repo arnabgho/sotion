@@ -1,0 +1,34 @@
+name: feature_development
+description: Standard feature development pipeline with plan, implement, review cycle
+
+steps:
+  - name: plan
+    agent_role: planner
+    prompt: |
+      Create a plan for the following feature request:
+      {feature_request}
+
+      Break it down into clear tasks with descriptions.
+    timeout_seconds: 120
+    retry_count: 1
+
+  - name: implement
+    agent_role: developer
+    prompt: |
+      Implement the following based on this plan:
+      {last_output}
+
+      Write clean, tested code. Log your progress.
+    timeout_seconds: 600
+    retry_count: 2
+
+  - name: review
+    agent_role: reviewer
+    prompt: |
+      Review the implementation:
+      {last_output}
+
+      Check for correctness, style, security, and test coverage.
+      Score the quality from 0.0 to 1.0.
+    timeout_seconds: 120
+    retry_count: 1
