@@ -1,6 +1,7 @@
 """Multi-agent orchestrator: manages N agent loops with message routing."""
 
 import asyncio
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -279,7 +280,7 @@ class SotionOrchestrator:
             active_names = list(self.agents.keys())
 
         # Resolve routing
-        mode, target_names = self.router.resolve_owner(
+        mode, target_names, metadata = self.router.resolve_owner(
             message, self.agents, active_names
         )
 
@@ -298,6 +299,36 @@ class SotionOrchestrator:
 
         # Process based on routing mode
         if mode == "broadcast":
+            is_standup = metadata.get("is_standup", False)
+
+            # Inject standup prompt if this is a standup request
+            if is_standup:
+                logger.info("Processing standup request")
+                standup_prompt = """
+This is a standup request. Please provide a brief update on your recent work:
+
+1. **What you've worked on recently** (last 24-48 hours)
+2. **Current tasks** (what you're doing now)
+3. **Blockers or questions** (if any)
+
+Use the `log_update` tool to record your update, then respond with a summary.
+Format your response as:
+
+**[Your Name] - [Your Role]**
+- Recent: [brief summary]
+- Current: [current task]
+- Blockers: [any issues or "None"]
+"""
+                # Create modified message with standup prompt
+                standup_message = InboundMessage(
+                    content=f"{standup_prompt}\n\nOriginal request: {message.content}",
+                    channel=message.channel,
+                    chat_id=message.chat_id,
+                    sender_name=message.sender_name,
+                    mentions=message.mentions,
+                )
+                message = standup_message
+
             # All target agents respond concurrently
             responses = await asyncio.gather(
                 *[
@@ -307,6 +338,23 @@ class SotionOrchestrator:
                 ],
                 return_exceptions=True,
             )
+
+            # Aggregate standup responses into single report
+            if is_standup:
+                standup_report = await self._format_standup_report(
+                    responses, message.chat_id
+                )
+                return [
+                    OutboundMessage(
+                        channel=message.channel,
+                        chat_id=message.chat_id,
+                        content=standup_report,
+                        sender_agent_name="System",
+                        message_type="standup_response",
+                    )
+                ]
+
+            # Regular broadcast: return individual responses
             results = []
             for r in responses:
                 if isinstance(r, Exception):
@@ -390,6 +438,67 @@ class SotionOrchestrator:
                 content=f"[{agent_name}] Error: {str(e)}",
                 sender_agent_name=agent_name,
             )
+
+    async def _format_standup_report(
+        self, responses: list, channel_id: str
+    ) -> str:
+        """Format agent responses into a standup report."""
+        report_lines = [
+            "## 📊 Team Standup Report\n",
+            f"*Generated at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n",
+        ]
+
+        # Get recent log_update entries
+        updates_by_agent = {}
+        if self.db:
+            try:
+                recent_updates = await self.db.get_recent_agent_updates(
+                    channel_id=channel_id,
+                    hours=48,  # Last 48 hours
+                )
+
+                # Group by agent
+                for update in recent_updates:
+                    agent_name = None
+                    # Find agent name by ID
+                    for name, config in self.agent_configs.items():
+                        if str(config.id) == str(update.agent_id):
+                            agent_name = name
+                            break
+
+                    if agent_name:
+                        if agent_name not in updates_by_agent:
+                            updates_by_agent[agent_name] = []
+                        updates_by_agent[agent_name].append(update)
+            except Exception as e:
+                logger.error(f"Failed to get recent updates: {e}")
+
+        # Process each response
+        for response in responses:
+            if isinstance(response, Exception):
+                continue
+
+            if isinstance(response, OutboundMessage):
+                agent_name = response.sender_agent_name
+                agent_config = self.agent_configs.get(agent_name)
+
+                if not agent_config:
+                    continue
+
+                report_lines.append(f"\n### {agent_name} ({agent_config.role})")
+
+                # Include logged updates
+                if updates_by_agent.get(agent_name):
+                    report_lines.append("\n**Recent Updates:**")
+                    for update in updates_by_agent[agent_name][:3]:  # Last 3
+                        report_lines.append(f"- {update.summary}")
+
+                # Include agent's standup response
+                report_lines.append(f"\n{response.content}\n")
+
+        report_lines.append("\n---\n*Use `log_update` tool to record your progress*")
+
+        return "\n".join(report_lines)
 
     async def _store_inbound(self, message: InboundMessage) -> None:
         """Store an inbound message to the database."""

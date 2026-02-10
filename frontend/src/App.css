@@ -803,3 +803,146 @@
   background: #2d2d2d;
   font-weight: 600;
 }
+
+/* ========================================
+   1:1 Mode Styles
+   ======================================== */
+
+.chat-header .header-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.agent-selector {
+  background: #2d2d2d;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.agent-selector:hover {
+  border-color: #666;
+}
+
+.agent-selector:focus {
+  outline: none;
+  border-color: #61afef;
+}
+
+.btn-exit-dm {
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.btn-exit-dm:hover {
+  background: #c0392b;
+}
+
+/* ========================================
+   DM Channel Styling
+   ======================================== */
+
+.channel-item.dm-mode {
+  background: #2d2550; /* Purple tint */
+  border-left: 3px solid #9b59b6;
+}
+
+.channel-item.dm-mode:hover {
+  background: #3d3560;
+}
+
+.channel-item.dm-mode.active {
+  background: #4d4570;
+}
+
+.channel-prefix {
+  font-weight: 600;
+  margin-right: 4px;
+  color: #888;
+}
+
+.dm-badge {
+  margin-left: auto;
+  background: #9b59b6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+/* ========================================
+   @here Standup Button
+   ======================================== */
+
+.btn-here {
+  background: #2ecc71;
+  border: none;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-here:hover:not(:disabled) {
+  background: #27ae60;
+}
+
+.btn-here:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   Standup Response Styling
+   ======================================== */
+
+.message.message-standup_response {
+  background: #1a3a1a; /* Green tint */
+  border-left: 4px solid #2ecc71;
+}
+
+.message.message-standup_response .message-header {
+  color: #2ecc71;
+  font-weight: 600;
+}
+
+.message.message-standup_response .message-content h2 {
+  color: #2ecc71;
+  font-size: 18px;
+  margin: 16px 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #2ecc71;
+}
+
+.message.message-standup_response .message-content h3 {
+  color: #3498db;
+  font-size: 16px;
+  margin: 12px 0 8px;
+}
+
+/* Update chat input area to accommodate @here button */
+.chat-input-area {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid #333;
+  background: #1e1e1e;
+}

@@ -1,6 +1,6 @@
 """CRUD operations for Supabase tables."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from loguru import logger
@@ -151,6 +151,21 @@ class DBQueries:
         if channel_id:
             query = query.eq("channel_id", channel_id)
         result = query.order("created_at", desc=True).limit(limit).execute()
+        return [AgentUpdate(**row) for row in result.data]
+
+    async def get_recent_agent_updates(
+        self, channel_id: str, hours: int = 48
+    ) -> list[AgentUpdate]:
+        """Get recent agent updates for a channel within the last N hours."""
+        cutoff_time = (datetime.now() - timedelta(hours=hours)).isoformat()
+        query = (
+            self.client.table("agent_updates")
+            .select("*")
+            .eq("channel_id", channel_id)
+            .gte("created_at", cutoff_time)
+            .order("created_at", desc=True)
+        )
+        result = query.execute()
         return [AgentUpdate(**row) for row in result.data]
 
     # --- Documents ---

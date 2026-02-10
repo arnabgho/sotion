@@ -102,6 +102,14 @@ async def pause_agents(channel_id: str, req: PauseRequest):
         return {"status": "all_unpaused"}
 
 
+@router.post("/channels/{channel_id}/unpause")
+async def unpause_agents(channel_id: str):
+    """Unpause all agents in a channel (exit 1:1 mode)."""
+    db = _get_db()
+    await db.unpause_all(channel_id)
+    return {"status": "success", "message": "All agents unpaused"}
+
+
 # --- Agent endpoints ---
 
 @router.get("/agents")

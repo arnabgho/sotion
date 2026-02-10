@@ -60,6 +60,8 @@ export function ChatView({ channel }: Props) {
   const { messages, connected, loading, sendMessage } = useWebSocket(channel.id);
   const [input, setInput] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [pauseTarget, setPauseTarget] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch agents for @mention autocomplete
@@ -81,13 +83,70 @@ export function ChatView({ channel }: Props) {
     setInput("");
   };
 
+  const handleEnterDM = async (agentName: string) => {
+    const agent = agents.find((a) => a.name === agentName);
+    if (!agent) return;
+
+    try {
+      const response = await fetch(`${API_URL}/channels/${channel.id}/pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ except_agent_id: agent.id }),
+      });
+
+      if (response.ok) {
+        setIsPaused(true);
+        setPauseTarget(agentName);
+      }
+    } catch (error) {
+      console.error("Failed to enter 1:1 mode:", error);
+    }
+  };
+
+  const handleExitDM = async () => {
+    try {
+      const response = await fetch(`${API_URL}/channels/${channel.id}/unpause`, {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        setIsPaused(false);
+        setPauseTarget(null);
+      }
+    } catch (error) {
+      console.error("Failed to exit 1:1 mode:", error);
+    }
+  };
+
   return (
     <div className="chat-view">
       <div className="chat-header">
-        <h2># {channel.name}</h2>
-        <span className={`connection-status ${connected ? "connected" : "disconnected"}`}>
-          {connected ? "Connected" : "Disconnected"}
-        </span>
+        <h2>
+          {isPaused && pauseTarget ? `@ ${pauseTarget}` : `# ${channel.name}`}
+        </h2>
+        <div className="header-controls">
+          {isPaused ? (
+            <button className="btn-exit-dm" onClick={handleExitDM}>
+              Exit 1:1 Mode
+            </button>
+          ) : (
+            <select
+              className="agent-selector"
+              onChange={(e) => e.target.value && handleEnterDM(e.target.value)}
+              value=""
+            >
+              <option value="">Enter 1:1 Mode...</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.name}>
+                  {agent.name} ({agent.role})
+                </option>
+              ))}
+            </select>
+          )}
+          <span className={`connection-status ${connected ? "connected" : "disconnected"}`}>
+            {connected ? "Connected" : "Disconnected"}
+          </span>
+        </div>
       </div>
 
       <div className="chat-messages">
@@ -102,6 +161,14 @@ export function ChatView({ channel }: Props) {
       </div>
 
       <div className="chat-input-area">
+        <button
+          className="btn-here"
+          onClick={() => sendMessage("@here Please share your standup updates")}
+          disabled={!connected}
+          title="Request standup from all agents"
+        >
+          @here
+        </button>
         <MentionInput
           value={input}
           onChange={setInput}

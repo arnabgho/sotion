@@ -37,7 +37,7 @@ class MessageRouter:
         message: InboundMessage,
         agents: dict[str, "AgentLoop"],
         active_agent_names: list[str] | None = None,
-    ) -> tuple[str, list[str]]:
+    ) -> tuple[str, list[str], dict]:
         """
         Determine which agent(s) should handle a message.
 
@@ -47,18 +47,25 @@ class MessageRouter:
             active_agent_names: Names of non-paused agents in the channel.
 
         Returns:
-            Tuple of (routing_mode, agent_names) where routing_mode is one of:
-            - 'broadcast': all listed agents respond concurrently
-            - 'single': only the first listed agent responds
-            - 'coordinator': coordinator handles routing
+            Tuple of (routing_mode, agent_names, metadata) where:
+            - routing_mode: 'broadcast', 'single', or 'coordinator'
+            - agent_names: list of agent names to route to
+            - metadata: dict with additional routing context (e.g., {'is_standup': True})
         """
         mentions = message.mentions or self.parse_mentions(message.content)
         active = active_agent_names or list(agents.keys())
+        metadata = {}
 
         # @here -> broadcast to all active agents
         if "@here" in message.content:
-            logger.info(f"@here broadcast to {len(active)} agents")
-            return "broadcast", active
+            # Detect standup request
+            is_standup = any(
+                keyword in message.content.lower()
+                for keyword in ["standup", "update", "status", "progress", "report"]
+            )
+            metadata["is_standup"] = is_standup
+            logger.info(f"@here broadcast to {len(active)} agents (standup={is_standup})")
+            return "broadcast", active, metadata
 
         # @AgentName -> route to that agent
         if mentions:
@@ -71,17 +78,17 @@ class MessageRouter:
                         break
             if matched:
                 logger.info(f"Routed to mentioned agent(s): {matched}")
-                return "single", matched
+                return "single", matched, metadata
 
         # No mention -> coordinator
         if self.coordinator_name in agents and self.coordinator_name in active:
             logger.info(f"No mention, routing to coordinator: {self.coordinator_name}")
-            return "coordinator", [self.coordinator_name]
+            return "coordinator", [self.coordinator_name], metadata
 
         # Fallback: first active agent
         if active:
             logger.warning(f"Coordinator not found, falling back to: {active[0]}")
-            return "single", [active[0]]
+            return "single", [active[0]], metadata
 
         logger.error("No agents available to handle message")
-        return "single", []
+        return "single", [], metadata
