@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
     # Initialize LLM provider
     from sotion.providers.litellm_provider import LiteLLMProvider
-    provider = LiteLLMProvider(config)
+    provider = LiteLLMProvider.from_config(config)
 
     # Initialize DB queries
     db = DBQueries(get_supabase()) if config.supabase.url else None
@@ -68,9 +68,6 @@ async def lifespan(app: FastAPI):
     if db:
         _channel_manager = ChannelManager(config, _bus, db)
         await _channel_manager.start_all()
-
-    # Subscribe web channel to outbound messages
-    _bus.subscribe_outbound("web", ws_manager.broadcast_outbound)
 
     # Start orchestrator in background
     orchestrator_task = asyncio.create_task(_orchestrator.run())

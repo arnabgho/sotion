@@ -15,6 +15,15 @@ from sotion.session.manager import SessionManager
 from sotion.db.client import get_supabase
 from sotion.db.queries import DBQueries
 from sotion.db.models import Agent, Message
+from sotion.agents.tools import (
+    DelegateTool,
+    LogUpdateTool,
+    CreateDocTool,
+    EditDocTool,
+    QueryDocsTool,
+    CreateTaskTool,
+    CompleteTaskTool,
+)
 
 
 # Role -> allowed tools mapping
@@ -66,6 +75,120 @@ class SotionOrchestrator:
         self.agent_configs: dict[str, Agent] = {}  # name -> DB agent record
         self._running = False
 
+    def _load_role_prompt(self, role: str) -> str | None:
+        """Load role-specific prompt from markdown file."""
+        roles_dir = Path(__file__).parent / "agents" / "roles"
+        role_file = roles_dir / f"{role}.md"
+
+        if not role_file.exists():
+            logger.warning(f"Role file not found: {role_file}")
+            return None
+
+        try:
+            return role_file.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error(f"Failed to load role file {role_file}: {e}")
+            return None
+
+    async def _build_team_roster(self, channel_id: str | None = None) -> list[dict[str, str]]:
+        """Build team roster for agent context."""
+        roster = []
+
+        if channel_id and self.db:
+            # Get agents in this channel
+            members = await self.db.get_channel_members(channel_id, include_paused=True)
+            for member in members:
+                agent_config = next(
+                    (c for c in self.agent_configs.values() if c.id == member.agent_id),
+                    None
+                )
+                if agent_config:
+                    roster.append({
+                        "name": agent_config.name,
+                        "role": agent_config.role,
+                        "status": "paused" if member.is_paused else agent_config.status,
+                    })
+        else:
+            # Use all registered agents
+            for agent_config in self.agent_configs.values():
+                roster.append({
+                    "name": agent_config.name,
+                    "role": agent_config.role,
+                    "status": agent_config.status,
+                })
+
+        return roster
+
+    def _build_economy_status(self, agent_config: Agent) -> dict[str, Any]:
+        """Build economy status dict for agent context."""
+        return {
+            "salary_balance": agent_config.salary_balance,
+            "performance_score": agent_config.performance_score,
+            "token_budget": agent_config.token_budget,
+            "status": agent_config.status,
+        }
+
+    def _register_sotion_tools(
+        self, loop: AgentLoop, agent_config: Agent, allowed_tools: list[str]
+    ) -> None:
+        """Register Sotion-specific tools based on role."""
+
+        # Delegate tool (coordinator only)
+        if "delegate" in allowed_tools:
+            available_agents = [
+                name for name in self.agent_configs.keys()
+                if name != agent_config.name
+            ]
+            delegate_tool = DelegateTool(
+                delegate_callback=None,  # TODO: implement in future
+                available_agents=available_agents,
+            )
+            loop.tools.register(delegate_tool)
+
+        # Log update tool
+        if "log_update" in allowed_tools:
+            log_tool = LogUpdateTool(
+                db=self.db,
+                agent_id=agent_config.id,
+                channel_id="",  # Set per-message
+            )
+            loop.tools.register(log_tool)
+
+        # Document tools
+        if "create_doc" in allowed_tools:
+            create_doc_tool = CreateDocTool(
+                db=self.db,
+                channel_id="",  # Set per-message
+                agent_id=agent_config.id,
+            )
+            loop.tools.register(create_doc_tool)
+
+        if "edit_doc" in allowed_tools:
+            edit_doc_tool = EditDocTool(
+                db=self.db,
+                agent_id=agent_config.id,
+            )
+            loop.tools.register(edit_doc_tool)
+
+        if "query_docs" in allowed_tools:
+            query_docs_tool = QueryDocsTool(
+                db=self.db,
+                channel_id="",  # Set per-message
+            )
+            loop.tools.register(query_docs_tool)
+
+        # Task tools
+        if "create_task" in allowed_tools:
+            create_task_tool = CreateTaskTool(
+                db=self.db,
+                channel_id="",  # Set per-message
+            )
+            loop.tools.register(create_task_tool)
+
+        if "complete_task" in allowed_tools:
+            complete_task_tool = CompleteTaskTool(db=self.db)
+            loop.tools.register(complete_task_tool)
+
     async def register_agent(self, agent_config: Agent) -> AgentLoop:
         """
         Create and register an AgentLoop for an agent.
@@ -85,8 +208,31 @@ class SotionOrchestrator:
             model=model,
         )
 
+        # Load role-specific prompt
+        role_prompt = self._load_role_prompt(agent_config.role)
+
+        # Build team roster (all registered agents initially)
+        team_roster = await self._build_team_roster(channel_id=None)
+
+        # Build economy status
+        economy_status = self._build_economy_status(agent_config)
+
+        # Set agent identity
+        loop.context.set_agent_identity(
+            name=agent_config.name,
+            role=agent_config.role,
+            role_prompt=role_prompt,
+            team_roster=team_roster,
+            economy_status=economy_status,
+        )
+
         # Configure tools based on role
         allowed_tools = ROLE_TOOLS.get(agent_config.role, [])
+
+        # Register Sotion-specific tools
+        self._register_sotion_tools(loop, agent_config, allowed_tools)
+
+        # Remove non-allowed default tools
         self._configure_tools(loop, agent_config, allowed_tools)
 
         self.agents[agent_config.name] = loop
@@ -184,6 +330,36 @@ class SotionOrchestrator:
         if not loop:
             return None
 
+        config = self.agent_configs.get(agent_name)
+        if not config:
+            return None
+
+        # Update context on Sotion tools that need it
+        # LogUpdateTool: set_context(agent_id, channel_id)
+        log_tool = loop.tools.get("log_update")
+        if log_tool and hasattr(log_tool, "set_context"):
+            log_tool.set_context(config.id, message.chat_id)
+
+        # CreateDocTool: set_context(channel_id, agent_id)
+        create_doc_tool = loop.tools.get("create_doc")
+        if create_doc_tool and hasattr(create_doc_tool, "set_context"):
+            create_doc_tool.set_context(message.chat_id, config.id)
+
+        # EditDocTool: set_context(agent_id)
+        edit_doc_tool = loop.tools.get("edit_doc")
+        if edit_doc_tool and hasattr(edit_doc_tool, "set_context"):
+            edit_doc_tool.set_context(config.id)
+
+        # QueryDocsTool: set_context(channel_id)
+        query_docs_tool = loop.tools.get("query_docs")
+        if query_docs_tool and hasattr(query_docs_tool, "set_context"):
+            query_docs_tool.set_context(message.chat_id)
+
+        # CreateTaskTool: set_context(channel_id)
+        create_task_tool = loop.tools.get("create_task")
+        if create_task_tool and hasattr(create_task_tool, "set_context"):
+            create_task_tool.set_context(message.chat_id)
+
         try:
             response_text = await loop.process_direct(
                 content=message.content,
@@ -192,15 +368,13 @@ class SotionOrchestrator:
                 chat_id=message.chat_id,
             )
 
-            config = self.agent_configs.get(agent_name)
-
             outbound = OutboundMessage(
                 channel=message.channel,
                 chat_id=message.chat_id,
                 content=response_text,
-                sender_agent_id=config.id if config else None,
+                sender_agent_id=config.id,
                 sender_agent_name=agent_name,
-                sender_agent_role=config.role if config else None,
+                sender_agent_role=config.role,
             )
 
             # Store the outbound message

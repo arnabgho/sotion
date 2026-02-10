@@ -53,14 +53,17 @@ class ContextBuilder:
 
         # Core identity (sotion or nanobot-style)
         if self.agent_name and self.role_prompt:
+            # Multi-agent mode: use role-specific identity
             parts.append(self._get_sotion_identity())
+            # Skip generic bootstrap files in multi-agent mode to avoid identity conflicts
         else:
+            # Single-agent mode: use generic identity
             parts.append(self._get_identity())
 
-        # Bootstrap files
-        bootstrap = self._load_bootstrap_files()
-        if bootstrap:
-            parts.append(bootstrap)
+            # Bootstrap files (only in single-agent mode)
+            bootstrap = self._load_bootstrap_files()
+            if bootstrap:
+                parts.append(bootstrap)
 
         # Memory context
         memory = self.memory.get_memory_context()

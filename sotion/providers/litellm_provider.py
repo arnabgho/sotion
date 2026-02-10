@@ -14,15 +14,15 @@ from sotion.providers.registry import find_by_model, find_gateway
 class LiteLLMProvider(LLMProvider):
     """
     LLM provider using LiteLLM for multi-provider support.
-    
+
     Supports OpenRouter, Anthropic, OpenAI, Gemini, MiniMax, and many other providers through
     a unified interface.  Provider-specific logic is driven by the registry
     (see providers/registry.py) — no if-elif chains needed here.
     """
-    
+
     def __init__(
-        self, 
-        api_key: str | None = None, 
+        self,
+        api_key: str | None = None,
         api_base: str | None = None,
         default_model: str = "anthropic/claude-opus-4-5",
         extra_headers: dict[str, str] | None = None,
@@ -31,11 +31,36 @@ class LiteLLMProvider(LLMProvider):
         super().__init__(api_key, api_base)
         self.default_model = default_model
         self.extra_headers = extra_headers or {}
-        
+
         # Detect gateway / local deployment.
         # provider_name (from config key) is the primary signal;
         # api_key / api_base are fallback for auto-detection.
         self._gateway = find_gateway(provider_name, api_key, api_base)
+
+    @classmethod
+    def from_config(cls, config: Any) -> "LiteLLMProvider":
+        """Create LiteLLMProvider from a Config object."""
+        from sotion.config.schema import Config
+
+        if not isinstance(config, Config):
+            raise TypeError(f"Expected Config object, got {type(config)}")
+
+        default_model = config.agents.defaults.model
+        provider_name = config.get_provider_name(default_model)
+        api_key = config.get_api_key(default_model)
+        api_base = config.get_api_base(default_model)
+
+        # Get extra headers from provider config if available
+        provider_config = config.get_provider(default_model)
+        extra_headers = provider_config.extra_headers if provider_config else None
+
+        return cls(
+            api_key=api_key,
+            api_base=api_base,
+            default_model=default_model,
+            extra_headers=extra_headers,
+            provider_name=provider_name,
+        )
         
         # Configure environment variables
         if api_key:

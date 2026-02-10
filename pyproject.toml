@@ -24,6 +24,7 @@ dependencies = [
     "loguru>=0.7.0",
     "rich>=13.0.0",
     "croniter>=2.0.0",
+    "readability-lxml>=0.8.1",
 
     # Sotion-specific
     "supabase>=2.0.0",
