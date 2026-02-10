@@ -1,7 +1,11 @@
+import { useState } from "react";
 import type { Agent } from "../types";
+
+const API_URL = "http://localhost:8000/api";
 
 interface Props {
   agent: Agent;
+  onDMCreated?: (dmChannel: any) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -12,9 +16,37 @@ const STATUS_COLORS: Record<string, string> = {
   fired: "#e74c3c",
 };
 
-export function AgentProfile({ agent }: Props) {
+export function AgentProfile({ agent, onDMCreated }: Props) {
   const statusColor = STATUS_COLORS[agent.status] || "#95a5a6";
   const scorePercent = Math.round(agent.performance_score * 100);
+  const [creating, setCreating] = useState(false);
+
+  const handleStartDM = async () => {
+    setCreating(true);
+    try {
+      const response = await fetch(`${API_URL}/dms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agent_id: agent.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create DM");
+      }
+
+      const dm = await response.json();
+
+      // Notify parent component to select the DM
+      if (onDMCreated) {
+        onDMCreated(dm);
+      }
+    } catch (error) {
+      console.error("Failed to start DM:", error);
+      alert("Failed to start DM with agent");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <div className="agent-profile">
@@ -54,6 +86,13 @@ export function AgentProfile({ agent }: Props) {
           <span className="stat-value">{agent.token_budget.toLocaleString()}</span>
         </div>
       </div>
+      <button
+        className="btn-start-dm"
+        onClick={handleStartDM}
+        disabled={creating}
+      >
+        {creating ? "Creating..." : "Message"}
+      </button>
     </div>
   );
 }

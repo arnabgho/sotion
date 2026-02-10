@@ -3,9 +3,10 @@ import type { Channel } from "../types";
 
 const API_URL = "http://localhost:8000/api";
 
-interface ChannelWithStatus extends Channel {
-  is_dm: boolean;
-  dm_agent_name?: string;
+interface DM extends Channel {
+  agent_name: string;
+  agent_role: string;
+  agent_avatar_emoji: string;
 }
 
 interface Props {
@@ -14,74 +15,93 @@ interface Props {
 }
 
 export function ChannelList({ selectedChannel, onSelectChannel }: Props) {
-  const [channels, setChannels] = useState<ChannelWithStatus[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [dms, setDms] = useState<DM[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchChannelsWithStatus = async () => {
+    const fetchAll = async () => {
       setLoading(true);
       try {
-        const channelsRes = await fetch(`${API_URL}/channels`);
-        const channelsData: Channel[] = await channelsRes.json();
+        const [channelsRes, dmsRes] = await Promise.all([
+          fetch(`${API_URL}/channels`),
+          fetch(`${API_URL}/dms`),
+        ]);
 
-        // Check pause status for each channel
-        const channelsWithStatus = await Promise.all(
-          channelsData.map(async (ch: Channel) => {
-            try {
-              const membersRes = await fetch(`${API_URL}/channels/${ch.id}/members`);
-              const members = await membersRes.json();
+        const channelsData = await channelsRes.json();
+        const dmsData = await dmsRes.json();
 
-              const pausedCount = members.filter((m: any) => m.is_paused).length;
-              const is_dm = pausedCount === members.length - 1; // All but one paused
-              const dm_agent_name = is_dm
-                ? members.find((m: any) => !m.is_paused)?.agent_name
-                : undefined;
-
-              return { ...ch, is_dm, dm_agent_name };
-            } catch (error) {
-              console.error(`Failed to fetch members for channel ${ch.id}:`, error);
-              return { ...ch, is_dm: false };
-            }
-          })
-        );
-
-        setChannels(channelsWithStatus);
+        setChannels(channelsData);
+        setDms(dmsData);
       } catch (err) {
-        console.error("Failed to load channels:", err);
+        console.error("Failed to load channels and DMs:", err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchChannelsWithStatus();
+    fetchAll();
+
+    // Poll every 5 seconds to refresh data
+    const interval = setInterval(() => {
+      fetchAll();
+    }, 5000);
+
+    return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="channel-list">
       <div className="channel-list-header">
-        <h2>Channels</h2>
+        <h2>Sotion</h2>
       </div>
-      <div className="channel-list-items">
-        {loading ? (
-          <div className="channel-loading">Loading channels...</div>
-        ) : channels.length === 0 ? (
-          <div className="channel-empty">No channels yet</div>
-        ) : (
-          channels.map((ch) => (
-            <button
-              key={ch.id}
-              className={`channel-item ${selectedChannel?.id === ch.id ? "active" : ""} ${ch.is_dm ? "dm-mode" : ""}`}
-              onClick={() => onSelectChannel(ch)}
-            >
-              <span className="channel-prefix">{ch.is_dm ? "@" : "#"}</span>
-              <span className="channel-name">
-                {ch.is_dm && ch.dm_agent_name ? ch.dm_agent_name : ch.name}
-              </span>
-              {ch.is_dm && <span className="dm-badge">1:1</span>}
-            </button>
-          ))
-        )}
-      </div>
+
+      {loading ? (
+        <div className="channel-loading">Loading...</div>
+      ) : (
+        <>
+          {/* DM Section */}
+          {dms.length > 0 && (
+            <div className="dm-section">
+              <h3 className="section-title">Direct Messages</h3>
+              <div className="channel-list-items">
+                {dms.map((dm) => (
+                  <button
+                    key={dm.id}
+                    className={`channel-item dm-item ${selectedChannel?.id === dm.id ? "active" : ""}`}
+                    onClick={() => onSelectChannel(dm)}
+                  >
+                    <span className="channel-prefix">@</span>
+                    <span className="channel-name">{dm.agent_name}</span>
+                    <span className="agent-role-hint">{dm.agent_role}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Channels Section */}
+          <div className="channel-section">
+            <h3 className="section-title">Channels</h3>
+            <div className="channel-list-items">
+              {channels.length === 0 ? (
+                <div className="channel-empty">No channels yet</div>
+              ) : (
+                channels.map((ch) => (
+                  <button
+                    key={ch.id}
+                    className={`channel-item ${selectedChannel?.id === ch.id ? "active" : ""}`}
+                    onClick={() => onSelectChannel(ch)}
+                  >
+                    <span className="channel-prefix">#</span>
+                    <span className="channel-name">{ch.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

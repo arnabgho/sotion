@@ -69,11 +69,36 @@ class DBQueries:
         return Channel(**result.data[0]) if result.data else None
 
     async def list_channels(self, include_archived: bool = False) -> list[Channel]:
-        query = self.client.table("channels").select("*")
+        """Get all project channels (excludes DMs)."""
+        query = self.client.table("channels").select("*").eq("channel_type", "project")
         if not include_archived:
             query = query.eq("is_archived", False)
         result = query.execute()
         return [Channel(**row) for row in result.data]
+
+    async def list_dms(self, limit: int = 50) -> list[Channel]:
+        """Get all DM conversations."""
+        result = (
+            self.client.table("channels")
+            .select("*")
+            .eq("channel_type", "dm")
+            .eq("is_archived", False)
+            .limit(limit)
+            .execute()
+        )
+        return [Channel(**row) for row in result.data]
+
+    async def find_dm_by_agent(self, agent_id: str) -> Channel | None:
+        """Find existing DM with a specific agent."""
+        result = (
+            self.client.table("channels")
+            .select("*")
+            .eq("channel_type", "dm")
+            .eq("dm_participant_agent_id", agent_id)
+            .limit(1)
+            .execute()
+        )
+        return Channel(**result.data[0]) if result.data else None
 
     # --- Channel Members ---
 

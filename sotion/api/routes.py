@@ -43,6 +43,10 @@ class PauseRequest(BaseModel):
     except_agent_id: str | None = None
 
 
+class CreateDMRequest(BaseModel):
+    agent_id: str
+
+
 # --- Channel endpoints ---
 
 @router.get("/channels")
@@ -108,6 +112,65 @@ async def unpause_agents(channel_id: str):
     db = _get_db()
     await db.unpause_all(channel_id)
     return {"status": "success", "message": "All agents unpaused"}
+
+
+# --- DM endpoints ---
+
+@router.post("/dms")
+async def create_dm(req: CreateDMRequest):
+    """Create or get existing DM conversation with an agent."""
+    db = _get_db()
+
+    # Check if DM already exists with this agent
+    existing = await db.find_dm_by_agent(req.agent_id)
+    if existing:
+        return existing.model_dump(mode="json")
+
+    # Get agent info for naming
+    agent = await db.get_agent(req.agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    # Create new DM channel
+    dm = Channel(
+        name=f"dm-{agent.name}",
+        description=f"Direct message with {agent.name}",
+        channel_type="dm",
+        dm_participant_agent_id=req.agent_id,
+    )
+
+    result = await db.create_channel(dm)
+
+    # Add agent as member
+    member = ChannelMember(
+        channel_id=result.id,
+        agent_id=req.agent_id,
+        is_paused=False,
+    )
+    await db.add_member(member)
+
+    return result.model_dump(mode="json")
+
+
+@router.get("/dms")
+async def list_dms():
+    """List all DM conversations with agent info."""
+    db = _get_db()
+    dms = await db.list_dms()
+
+    # Enrich with agent info
+    enriched = []
+    for dm in dms:
+        if dm.dm_participant_agent_id:
+            agent = await db.get_agent(dm.dm_participant_agent_id)
+            enriched.append({
+                **dm.model_dump(mode="json"),
+                "agent_name": agent.name if agent else "Unknown",
+                "agent_role": agent.role if agent else None,
+                "agent_avatar_emoji": agent.avatar_emoji if agent else "🤖",
+            })
+
+    return enriched
 
 
 # --- Agent endpoints ---

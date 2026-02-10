@@ -41,7 +41,7 @@ function App() {
       </div>
 
       <div className="sidebar-right">
-        <AgentSidebar />
+        <AgentSidebar onSelectChannel={setSelectedChannel} />
       </div>
 
       <ToastContainer toasts={toasts} onClose={closeToast} />

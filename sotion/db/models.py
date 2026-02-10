@@ -33,7 +33,8 @@ class Channel(BaseModel):
     id: str = Field(default_factory=_uuid)
     name: str
     description: str | None = None
-    channel_type: str = "project"
+    channel_type: str = "project"  # "project" or "dm"
+    dm_participant_agent_id: str | None = None  # Set when channel_type="dm"
     is_archived: bool = False
     created_at: datetime = Field(default_factory=datetime.now)
 

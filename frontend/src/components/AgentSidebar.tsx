@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import type { Agent } from "../types";
+import type { Agent, Channel } from "../types";
 import { AgentProfile } from "./AgentProfile";
 
 const API_URL = "http://localhost:8000/api";
 
-export function AgentSidebar() {
+interface Props {
+  onSelectChannel?: (channel: Channel) => void;
+}
+
+export function AgentSidebar({ onSelectChannel }: Props) {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -22,6 +26,13 @@ export function AgentSidebar() {
       });
   }, []);
 
+  const handleDMCreated = (dmChannel: any) => {
+    // Notify parent to select the newly created DM
+    if (onSelectChannel) {
+      onSelectChannel(dmChannel as Channel);
+    }
+  };
+
   return (
     <div className="agent-sidebar">
       <div className="agent-sidebar-header">
@@ -34,7 +45,11 @@ export function AgentSidebar() {
           <div className="agent-empty">No agents registered</div>
         ) : (
           agents.map((agent) => (
-            <AgentProfile key={agent.id} agent={agent} />
+            <AgentProfile
+              key={agent.id}
+              agent={agent}
+              onDMCreated={handleDMCreated}
+            />
           ))
         )}
       </div>
