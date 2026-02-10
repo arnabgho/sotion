@@ -10,12 +10,20 @@ interface Props {
 
 export function ChannelList({ selectedChannel, onSelectChannel }: Props) {
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     fetch(`${API_URL}/channels`)
       .then((r) => r.json())
-      .then(setChannels)
-      .catch(console.error);
+      .then((data) => {
+        setChannels(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load channels:", err);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -24,18 +32,21 @@ export function ChannelList({ selectedChannel, onSelectChannel }: Props) {
         <h2>Channels</h2>
       </div>
       <div className="channel-list-items">
-        {channels.map((ch) => (
-          <button
-            key={ch.id}
-            className={`channel-item ${selectedChannel?.id === ch.id ? "active" : ""}`}
-            onClick={() => onSelectChannel(ch)}
-          >
-            <span className="channel-hash">#</span>
-            <span className="channel-name">{ch.name}</span>
-          </button>
-        ))}
-        {channels.length === 0 && (
+        {loading ? (
+          <div className="channel-loading">Loading channels...</div>
+        ) : channels.length === 0 ? (
           <div className="channel-empty">No channels yet</div>
+        ) : (
+          channels.map((ch) => (
+            <button
+              key={ch.id}
+              className={`channel-item ${selectedChannel?.id === ch.id ? "active" : ""}`}
+              onClick={() => onSelectChannel(ch)}
+            >
+              <span className="channel-hash">#</span>
+              <span className="channel-name">{ch.name}</span>
+            </button>
+          ))
         )}
       </div>
     </div>

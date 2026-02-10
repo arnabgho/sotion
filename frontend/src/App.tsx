@@ -4,10 +4,13 @@ import { ChannelList } from "./components/ChannelList";
 import { ChatView } from "./components/ChatView";
 import { AgentSidebar } from "./components/AgentSidebar";
 import { DocumentList } from "./components/DocumentList";
+import { ToastContainer } from "./components/Toast";
+import { useToast } from "./hooks/useToast";
 import "./App.css";
 
 function App() {
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const { toasts, closeToast } = useToast();
 
   return (
     <div className="app">
@@ -40,6 +43,8 @@ function App() {
       <div className="sidebar-right">
         <AgentSidebar />
       </div>
+
+      <ToastContainer toasts={toasts} onClose={closeToast} />
     </div>
   );
 }

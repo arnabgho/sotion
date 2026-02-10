@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from "react";
-import type { Channel, WebSocketMessage } from "../types";
+import type { Channel, WebSocketMessage, Agent } from "../types";
 import { useWebSocket } from "../hooks/useWebSocket";
+import { MentionInput } from "./MentionInput";
+
+const API_URL = "http://localhost:8000/api";
 
 interface Props {
   channel: Channel;
@@ -21,9 +24,18 @@ function MessageBubble({ msg }: { msg: WebSocketMessage }) {
     ? ROLE_COLORS[msg.sender_role] || "#95a5a6"
     : "#95a5a6";
 
+  const getMessageTypeIcon = () => {
+    if (msg.message_type === "standup_request") return "📊";
+    if (msg.message_type === "command") return "⚡";
+    return null;
+  };
+
+  const messageTypeIcon = getMessageTypeIcon();
+
   return (
-    <div className={`message ${isHuman ? "message-human" : "message-agent"}`}>
+    <div className={`message ${isHuman ? "message-human" : "message-agent"} ${msg.message_type ? `message-${msg.message_type}` : ""}`}>
       <div className="message-header">
+        {messageTypeIcon && <span className="message-type-icon">{messageTypeIcon}</span>}
         <span className="message-sender" style={!isHuman ? { color: roleColor } : {}}>
           {msg.sender_name || "Unknown"}
         </span>
@@ -32,6 +44,9 @@ function MessageBubble({ msg }: { msg: WebSocketMessage }) {
             {msg.sender_role}
           </span>
         )}
+        {msg.message_type && msg.message_type !== "chat" && (
+          <span className="message-type-badge">{msg.message_type.replace("_", " ")}</span>
+        )}
       </div>
       <div className="message-content">{msg.content}</div>
     </div>
@@ -39,9 +54,18 @@ function MessageBubble({ msg }: { msg: WebSocketMessage }) {
 }
 
 export function ChatView({ channel }: Props) {
-  const { messages, connected, sendMessage } = useWebSocket(channel.id);
+  const { messages, connected, loading, sendMessage } = useWebSocket(channel.id);
   const [input, setInput] = useState("");
+  const [agents, setAgents] = useState<Agent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch agents for @mention autocomplete
+  useEffect(() => {
+    fetch(`${API_URL}/agents`)
+      .then((r) => r.json())
+      .then(setAgents)
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -54,13 +78,6 @@ export function ChatView({ channel }: Props) {
     setInput("");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
   return (
     <div className="chat-view">
       <div className="chat-header">
@@ -71,20 +88,24 @@ export function ChatView({ channel }: Props) {
       </div>
 
       <div className="chat-messages">
-        {messages.map((msg, i) => (
-          <MessageBubble key={i} msg={msg} />
-        ))}
+        {loading ? (
+          <div className="loading-messages">Loading messages...</div>
+        ) : messages.length === 0 ? (
+          <div className="no-messages">No messages yet. Start the conversation!</div>
+        ) : (
+          messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)
+        )}
         <div ref={messagesEndRef} />
       </div>
 
       <div className="chat-input-area">
-        <textarea
-          className="chat-input"
+        <MentionInput
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={`Message #${channel.name}...`}
-          rows={1}
+          onChange={setInput}
+          onSend={handleSend}
+          agents={agents}
+          placeholder={`Message #${channel.name}... (use @name to mention agents)`}
+          disabled={!connected}
         />
         <button className="chat-send" onClick={handleSend} disabled={!connected}>
           Send

@@ -6,12 +6,20 @@ const API_URL = "http://localhost:8000/api";
 
 export function AgentSidebar() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    setLoading(true);
     fetch(`${API_URL}/agents`)
       .then((r) => r.json())
-      .then(setAgents)
-      .catch(console.error);
+      .then((data) => {
+        setAgents(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load agents:", err);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -20,11 +28,14 @@ export function AgentSidebar() {
         <h2>Team</h2>
       </div>
       <div className="agent-sidebar-list">
-        {agents.map((agent) => (
-          <AgentProfile key={agent.id} agent={agent} />
-        ))}
-        {agents.length === 0 && (
+        {loading ? (
+          <div className="agent-loading">Loading team...</div>
+        ) : agents.length === 0 ? (
           <div className="agent-empty">No agents registered</div>
+        ) : (
+          agents.map((agent) => (
+            <AgentProfile key={agent.id} agent={agent} />
+          ))
         )}
       </div>
     </div>
