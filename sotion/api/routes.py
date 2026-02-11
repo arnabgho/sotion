@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from sotion.db.client import get_supabase
 from sotion.db.queries import DBQueries
-from sotion.db.models import Channel, Agent, Message, ChannelMember
+from sotion.db.models import Channel, Agent, Message, ChannelMember, Document
 
 router = APIRouter()
 
@@ -45,6 +45,21 @@ class PauseRequest(BaseModel):
 
 class CreateDMRequest(BaseModel):
     agent_id: str
+
+
+class CreateDocumentRequest(BaseModel):
+    channel_id: str
+    title: str
+    content: str
+    doc_type: str = "note"
+
+
+class UpdateDocumentRequest(BaseModel):
+    content: str
+
+
+class CompleteTaskRequest(BaseModel):
+    quality_score: float | None = None
 
 
 # --- Channel endpoints ---
@@ -224,6 +239,41 @@ async def get_document(doc_id: str):
     return doc.model_dump(mode="json")
 
 
+@router.post("/documents")
+async def create_document(req: CreateDocumentRequest):
+    """Create a new document manually."""
+    db = _get_db()
+
+    doc = Document(
+        channel_id=req.channel_id,
+        title=req.title,
+        content=req.content,
+        doc_type=req.doc_type,
+        created_by=None,  # Manual creation (no agent)
+        last_edited_by=None,
+    )
+
+    result = await db.create_document(doc)
+    return result.model_dump(mode="json")
+
+
+@router.put("/documents/{doc_id}")
+async def update_document(doc_id: str, req: UpdateDocumentRequest):
+    """Update document content and create version snapshot."""
+    db = _get_db()
+
+    result = await db.update_document(
+        doc_id,
+        req.content,
+        edited_by=None  # Manual edit (no agent)
+    )
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return result.model_dump(mode="json")
+
+
 # --- Task endpoints ---
 
 @router.get("/channels/{channel_id}/tasks")
@@ -238,3 +288,16 @@ async def list_agent_tasks(agent_id: str, status: str | None = None):
     db = _get_db()
     tasks = await db.list_tasks(assigned_to=agent_id, status=status)
     return [t.model_dump(mode="json") for t in tasks]
+
+
+@router.post("/tasks/{task_id}/complete")
+async def complete_task_endpoint(task_id: str, req: CompleteTaskRequest):
+    """Mark a task as completed with optional quality score."""
+    db = _get_db()
+
+    result = await db.complete_task(task_id, req.quality_score)
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return result.model_dump(mode="json")

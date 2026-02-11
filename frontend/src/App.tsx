@@ -4,6 +4,7 @@ import { ChannelList } from "./components/ChannelList";
 import { ChatView } from "./components/ChatView";
 import { AgentSidebar } from "./components/AgentSidebar";
 import { DocumentList } from "./components/DocumentList";
+import { TaskList } from "./components/TaskList";
 import { ToastContainer } from "./components/Toast";
 import { useToast } from "./hooks/useToast";
 import "./App.css";
@@ -30,6 +31,7 @@ function App() {
             <ChatView channel={selectedChannel} />
             <div className="channel-details">
               <DocumentList channelId={selectedChannel.id} />
+              <TaskList channelId={selectedChannel.id} />
             </div>
           </>
         ) : (

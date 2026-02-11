@@ -29,13 +29,18 @@ from sotion.agents.tools import (
 
 # Role -> allowed tools mapping
 ROLE_TOOLS = {
-    "coordinator": ["delegate", "message", "log_update"],
+    "coordinator": [
+        "delegate", "message", "log_update",
+        "create_doc", "edit_doc", "query_docs",
+    ],
     "developer": [
         "read_file", "write_file", "edit_file", "list_dir", "exec",
         "web_search", "web_fetch", "log_update",
+        "create_doc", "edit_doc", "query_docs",
     ],
     "reviewer": [
         "read_file", "list_dir", "web_search", "web_fetch", "log_update",
+        "create_doc", "edit_doc", "query_docs",
     ],
     "planner": [
         "create_doc", "edit_doc", "query_docs", "create_task",
@@ -43,7 +48,7 @@ ROLE_TOOLS = {
     ],
     "researcher": [
         "read_file", "list_dir", "web_search", "web_fetch",
-        "query_docs", "log_update",
+        "create_doc", "edit_doc", "query_docs", "log_update",
     ],
     "documenter": [
         "create_doc", "edit_doc", "query_docs", "read_file",
